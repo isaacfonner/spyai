@@ -4,7 +4,8 @@
 	let audioChunks = [];
 	let transcript = '';
 	let loading = false;
-    var answer = '';
+	var answer = '';
+	let responseAudio;
 
 	async function startRecording() {
 		const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -33,23 +34,19 @@
 			});
 			const data = await res.json();
 			transcript = data.text || data.error;
-            console.log(transcript)
-            fetch(`/api/prompt?prompt=${transcript}`)
-            .then(response => {
-             if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-             }
-             return response.json(); 
-             })
-            .then(data => {
-            console.log('Data received:', data);
-            answer = data
-            loading = false;
-            })
-            .catch(error => {
-            console.error('There was a problem with the fetch operation:', error);
-            });
 
+			try {
+				const response = await fetch(`/api/prompt?prompt=${transcript}`);
+				if (!response.ok) {
+					throw new Error(`HTTP error! Status: ${response.status}`);
+				}
+				const result = await response.json();
+				answer = result;
+			} catch (error) {
+				console.error('There was a problem with the fetch operation:', error);
+			} finally {
+				loading = false;
+			}
 		};
 
 		mediaRecorder.start();
@@ -62,38 +59,42 @@
 			recording = false;
 		}
 	}
+	$: if (loading && responseAudio) {
+		responseAudio.play().catch((e) => {
+			console.warn('Playback prevented:', e);
+		});
+	}
 </script>
-<style>
-.container {
-  height: 200px;
-  position: relative;
-  border: 3px solid green;
-}
 
-.center {
-  margin: 0;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  -ms-transform: translate(-50%, -50%);
-  transform: translate(-50%, -50%);
-}
-</style>
+<svelte:head>
+	<title>Spy Ai</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+</svelte:head>
 
-<button on:click={recording ? stopRecording : startRecording}>
-	{recording ? 'Stop Recording' : 'Start Recording'}
-</button>
+<div class="min-h-screen flex items-center justify-center bg-gray-100">
+	<div class="text-center space-y-6 p-8 bg-white rounded-xl w-full mx-3">
+		<h1 class="text-3xl font-bold text-red-600">the ai to spy for</h1>
+		
+		<img src="ai.png" alt="" width="100" height="200" class="mx-auto" />
+		
 
-{#if loading}
-	<p>Processing...</p>
-{:else if transcript}
-	<p><strong>Answer:</strong> {answer.content}</p>
-{/if}
+		<button
+			on:click={recording ? stopRecording : startRecording}
+			class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+		>
+			{recording ? 'Stop Recording' : 'Start Recording'}
+		</button>
 
-    <head>
-        <title>Spai</title>
-    </head>
-
-        <h1 style="red">The AI to spy for.</h1>
-        <img src="ai.png" alt="ama" width="100" height="200" >
-       
+		{#if loading}
+			<audio loop
+				bind:this={responseAudio}
+				preload="auto"
+			>
+				<source src="balatro-talking.mp3" type="audio/mpeg" />
+			</audio>
+			<p class="text-gray-500">Combing through the database...</p>
+		{:else if transcript}
+			<p class="text-lg font-medium"><strong>Answer:</strong> {answer.content}</p>
+		{/if}
+	</div>
+</div>
